@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .chat-container {
+            height: calc(100vh - 180px);
+        }
+        .message-bubble {
+            max-width: 80%;
+            border-radius: 1rem;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+        .user-message {
+            background-color: #3b82f6;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .bot-message {
+            background-color: #f3f4f6;
+            margin-right: auto;
+            border-bottom-left-radius: 0.25rem;
+        }
+        /* Markdown styling */
+        .markdown-content {
+            line-height: 1.6;
+        }
+        .markdown-content h1, 
+        .markdown-content h2, 
+        .markdown-content h3, 
+        .markdown-content h4, 
+        .markdown-content h5, 
+        .markdown-content h6 {
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+        .markdown-content h1 { font-size: 1.5em; }
+        .markdown-content h2 { font-size: 1.3em; }
+        .markdown-content h3 { font-size: 1.1em; }
+        .markdown-content p { margin-bottom: 1em; }
+        .markdown-content ul, 
+        .markdown-content ol { 
+            margin-bottom: 1em;
+            padding-left: 1.5em;
+        }
+        .markdown-content li { margin-bottom: 0.5em; }
+        .markdown-content code {
+            background-color: rgba(0, 0, 0, 0.05);
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .markdown-content pre {
+            background-color: #f6f8fa;
+            border-radius: 6px;
+            padding: 1em;
+            overflow-x: auto;
+            margin-bottom: 1em;
+        }
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .markdown-content blockquote {
+            border-left: 4px solid #e5e7eb;
+            padding-left: 1em;
+            margin: 1em 0;
+            color: #4b5563;
+        }
+        .markdown-content a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+        .markdown-content a:hover {
+            text-decoration: underline;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #9ca3af;
+            margin: 0 2px;
+            animation: bounce 1.5s infinite ease-in-out;
+        }
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes bounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="flex flex-col h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm">
+            <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">AI</div>
+                    <h1 class="text-xl font-semibold text-gray-800">AI Assistant</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-sun"></i>
+                    </button>
+                    <button class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Chat Area -->
+        <div class="flex-1 overflow-y-auto px-4 py-6">
+            <div class="max-w-3xl mx-auto space-y-4 chat-container" id="chat-container">
+                <!-- Welcome Message -->
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-gray-200 rounded-full flex-shrink-0 flex items-center justify-center">
+                        <i class="fas fa-robot text-gray-500"></i>
+                    </div>
+                    <div class="message-bubble bot-message">
+                        <p>Hello! I'm your AI assistant. How can I help you today?</p>
+                    </div>
+                </div>
+                <!-- Messages will be added here dynamically -->
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="bg-white border-t border-gray-200 px-4 py-3">
+            <div class="max-w-3xl mx-auto">
+                <form id="chat-form" class="flex items-end space-x-2" enctype="multipart/form-data">
+                    <div class="flex-1 relative">
+                        <div class="flex items-center border border-gray-300 rounded-lg bg-white">
+                            <!-- File input (hidden but clickable via label) -->
+                            <input type="file" id="file-upload" class="hidden" accept=".pdf,.doc,.docx,.txt">
+                            <button type="button" id="attach-file" class="p-2 text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            <div id="file-info" class="text-sm text-gray-500 ml-2 hidden">
+                                <span id="file-name"></span>
+                                <button type="button" id="remove-file" class="text-red-500 ml-1">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <input type="text" id="user-input" 
+                                   class="flex-1 px-4 py-2 focus:outline-none" 
+                                   placeholder="Type your message..." autocomplete="off">
+                            <button type="submit" class="p-2 text-blue-500 hover:text-blue-700">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                <p class="text-xs text-gray-500 mt-2 text-center">AI may produce inaccurate information. Consider checking important information.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatForm = document.getElementById('chat-form');
+            const userInput = document.getElementById('user-input');
+            const chatContainer = document.getElementById('chat-container');
+            const fileUpload = document.getElementById('file-upload');
+            const attachFileBtn = document.getElementById('attach-file');
+            const fileInfo = document.getElementById('file-info');
+            const fileName = document.getElementById('file-name');
+            const removeFileBtn = document.getElementById('remove-file');
+            let selectedFile = null;
+
+            // Handle attach file button click - using mousedown to ensure it works before any other events
+            attachFileBtn.addEventListener('mousedown', function(e) {
+                e.preventDefault(); // Prevent any default behavior
+                e.stopPropagation(); // Stop event bubbling
+                fileUpload.click(); // Trigger the hidden file input
+            });
+
+            // Also handle click as a fallback
+            attachFileBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            // Handle file selection
+            fileUpload.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    selectedFile = e.target.files[0];
+                    fileName.textContent = selectedFile.name;
+                    fileInfo.classList.remove('hidden');
+                    // Focus the message input after file selection
+                    userInput.focus();
+                }
+            });
+
+            // Remove selected file
+            removeFileBtn.addEventListener('click', function(e) {
+                e.stopPropagation(); // Prevent form submission
+                selectedFile = null;
+                fileUpload.value = '';
+                fileInfo.classList.add('hidden');
+            });
+
+            // Send message
+            chatForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const message = userInput.value.trim();
+                if (!message && !selectedFile) return;
+
+                // Add user message to chat
+                addMessage('user', message, selectedFile ? selectedFile.name : null);
+                
+                // Clear input but keep the focus
+                userInput.value = '';
+                
+                if (selectedFile) {
+                    // Handle file upload
+                    const formData = new FormData();
+                    formData.append('file', selectedFile);
+                    if (message) {
+                        formData.append('message', message);
+                    }
+                    
+                    // Show typing indicator
+                    const typingId = showTypingIndicator();
+                    
+                    try {
+                        const response = await fetch('/ai/upload', {
+                            method: 'POST',
+                            body: formData
+                            // Don't set Content-Type header, let the browser set it with the boundary
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        hideTypingIndicator(typingId);
+                        addMessage('bot', data.response || "I've processed your file. How can I help you with it?");
+                    } catch (error) {
+                        console.error('Error:', error);
+                        hideTypingIndicator(typingId);
+                        addMessage('bot', "Sorry, I encountered an error processing your file: " + error.message);
+                    }
+                    
+                    // Reset file input
+                    selectedFile = null;
+                    fileUpload.value = '';
+                    fileInfo.classList.add('hidden');
+                } else {
+                    // Handle text-only message
+                    const typingId = showTypingIndicator();
+                    
+                    // Simulate API call (replace with actual API call)
+                    setTimeout(() => {
+                        hideTypingIndicator(typingId);
+                        addMessage('bot', "I understand you said: " + message);
+                    }, 1000);
+                }
+            });
+
+            // Add message to chat
+            function addMessage(sender, text, fileName = null) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `flex items-start space-x-3 ${sender === 'user' ? 'justify-end' : ''}`;
+                
+                if (sender === 'user') {
+                    messageDiv.innerHTML = `
+                        <div class="message-bubble user-message">
+                            ${fileName ? `<div class="text-xs text-blue-100 mb-1">File: ${fileName}</div>` : ''}
+                            <p>${text || ''}</p>
+                        </div>
+                        <div class="w-8 h-8 bg-blue-500 rounded-full flex-shrink-0 flex items-center justify-center text-white">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    `;
+                } else {
+                    // Render markdown for bot messages
+                    const renderedMarkdown = text ? marked.parse(text) : '';
+                    messageDiv.innerHTML = `
+                        <div class="w-8 h-8 bg-gray-200 rounded-full flex-shrink-0 flex items-center justify-center">
+                            <i class="fas fa-robot text-gray-500"></i>
+                        </div>
+                        <div class="message-bubble bot-message">
+                            <div class="markdown-content">${renderedMarkdown}</div>
+                        </div>
+                    `;
+                }
+                
+                chatContainer.appendChild(messageDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            // Show typing indicator
+            function showTypingIndicator() {
+                const id = 'typing-' + Date.now();
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'flex items-start space-x-3';
+                typingDiv.id = id;
+                typingDiv.innerHTML = `
+                    <div class="w-8 h-8 bg-gray-200 rounded-full flex-shrink-0 flex items-center justify-center">
+                        <i class="fas fa-robot text-gray-500"></i>
+                    </div>
+                    <div class="message-bubble bot-message typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                `;
+                chatContainer.appendChild(typingDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                return id;
+            }
+
+            // Hide typing indicator
+            function hideTypingIndicator(id) {
+                const typingElement = document.getElementById(id);
+                if (typingElement) {
+                    typingElement.remove();
+                }
+            }
+
+            // Allow Shift+Enter for new line, Enter to send
+            userInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    chatForm.dispatchEvent(new Event('submit'));
+                }
+            });
+        });
+    </script>
+</body>
+</html>
